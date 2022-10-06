@@ -1,0 +1,35 @@
+#!/bin/bash
+
+. /etc/profile
+
+COMMAND="$1"
+
+set_powersave() {
+  ENABLED=$(get_setting wifi.powersave)
+  if [ "${ENABLED}" = "1" ]
+  then
+    iw wlan0 set power_save on
+  else
+    iw wlan0 set power_save off
+  fi
+}
+
+set_bluetooth() {
+  case "${1}" in
+    "enable")
+      set_setting bluetooth.enabled 1
+      systemctl start bluetooth
+    ;;
+    "disable")
+      systemctl stop bluetooth
+      set_setting wifi.enabled 0
+    ;;
+    "reconnect")
+      systemctl restart bluetooth
+    ;;
+    "setpowersave")
+      set_powersave 2>/dev/null
+    ;;
+  esac
+}
+set_bluetooth ${COMMAND}

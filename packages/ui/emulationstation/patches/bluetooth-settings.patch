@@ -1,0 +1,117 @@
+diff --git a/es-app/src/ApiSystem.cpp b/es-app/src/ApiSystem.cpp
+index ea51d3d..da0f865 100644
+--- a/es-app/src/ApiSystem.cpp
++++ b/es-app/src/ApiSystem.cpp
+@@ -433,6 +433,16 @@ std::string ApiSystem::getIpAdress()
+ 	return result;
+ }
+ 
++bool ApiSystem::enableBluetooth()
++{
++	return executeScriptLegacy("/usr/bin/btctl enable");
++}
++
++bool ApiSystem::disableBluetooth()
++{
++	return executeScriptLegacy("/usr/bin/btctl disable");
++}
++
+ bool ApiSystem::scanNewBluetooth(const std::function<void(const std::string)>& func)
+ {
+ 	return executeScriptLegacy("batocera-bluetooth trust", func).second == 0;
+diff --git a/es-app/src/ApiSystem.h b/es-app/src/ApiSystem.h
+index c07898b..2c9035a 100644
+--- a/es-app/src/ApiSystem.h
++++ b/es-app/src/ApiSystem.h
+@@ -149,6 +149,8 @@ public:
+ 
+ 	virtual std::string getIpAdress();
+ 
++    bool enableBluetooth();
++    bool disableBluetooth();
+     bool scanNewBluetooth(const std::function<void(const std::string)>& func = nullptr);
+ 	std::vector<std::string> getBluetoothDeviceList();
+ 	bool removeBluetoothDevice(const std::string deviceName);
+diff --git a/es-app/src/ThreadedBluetooth.cpp b/es-app/src/ThreadedBluetooth.cpp
+index a589160..8fcef14 100644
+--- a/es-app/src/ThreadedBluetooth.cpp
++++ b/es-app/src/ThreadedBluetooth.cpp
+@@ -12,8 +12,9 @@ ThreadedBluetooth* ThreadedBluetooth::mInstance = nullptr;
+ ThreadedBluetooth::ThreadedBluetooth(Window* window)
+ 	: mWindow(window)
+ {
++			//window->pushGui(new GuiMsgBox(window, _("tommo5")));
+ 	mWndNotification = mWindow->createAsyncNotificationComponent();
+-	mWndNotification->updateTitle(ICONINDEX + _("SCANNING BLUETOOTH"));	
++	mWndNotification->updateTitle(_("SCANNING BLUETOOTH"));
+ 	mWndNotification->updateText(_("Searching for devices..."));
+ 
+ 	mHandle = new std::thread(&ThreadedBluetooth::run, this);
+@@ -29,6 +30,7 @@ ThreadedBluetooth::~ThreadedBluetooth()
+ 
+ void ThreadedBluetooth::updateNotificationComponentContent(const std::string info)
+ {
++			mWindow->pushGui(new GuiMsgBox(mWindow, _("update")));
+ 	if (info.empty())
+ 		return;
+ 
+@@ -42,13 +44,14 @@ void ThreadedBluetooth::run()
+ 	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
+ #endif
+ 
++			mWindow->pushGui(new GuiMsgBox(mWindow, _("run")));
+ 	ApiSystem::getInstance()->scanNewBluetooth([this](const std::string info)
+ 	{
+ 		updateNotificationComponentContent(info);
+ 	});
+ 
+-	delete this;
+-	ThreadedBluetooth::mInstance = nullptr;
++	//delete this;
++	//ThreadedBluetooth::mInstance = nullptr;
+ }
+ 
+ void ThreadedBluetooth::start(Window* window)
+diff --git a/es-app/src/guis/GuiMenu.cpp b/es-app/src/guis/GuiMenu.cpp
+index bf6e970..bc45f24 100644
+--- a/es-app/src/guis/GuiMenu.cpp
++++ b/es-app/src/guis/GuiMenu.cpp
+@@ -183,6 +183,8 @@ GuiMenu::GuiMenu(Window *window, bool animate) : GuiComponent(window), mMenu(win
+ 		}
+ #endif
+ 
++	    addEntry(_("Controller").c_str(), true, [this] { openControllersSettings_batocera(); }, "iconControllers");
++
+ 		addEntry(_("SCRAPER").c_str(), true, [this] { openScraperSettings(); }, "iconScraper");
+ //		addEntry(_("UPDATES & DOWNLOADS"), true, [this] { openUpdatesSettings(); }, "iconUpdates");
+ 	}
+@@ -2787,6 +2789,29 @@ void GuiMenu::openControllersSettings_batocera(int autoSel)
+ 
+ 	Window *window = mWindow;
+ 
++	//TOMMO
++	bool baseBluetoothEnabled = SystemConf::getInstance()->getBool("bluetooth.enabled");
++
++    auto enable_bluetooth = std::make_shared<SwitchComponent>(mWindow);
++    enable_bluetooth->setState(baseBluetoothEnabled);
++    s->addWithLabel(_("ENABLE BLUETOOTH"), enable_bluetooth);
++
++    s->addSaveFunc([baseBluetoothEnabled, enable_bluetooth, window]
++    {
++        bool enabled = enable_bluetooth->getState();
++
++        SystemConf::getInstance()->setBool("bluetooth.enabled", enabled);
++
++        if (enabled)
++        {
++			ApiSystem::getInstance()->enableBluetooth();
++        }
++        else
++        {
++			ApiSystem::getInstance()->disableBluetooth();
++		}
++    });
++
+ 	// CONTROLLER CONFIGURATION
+ 	s->addEntry(_("CONTROLLER MAPPING"), false, [window, this, s]
+ 	{
